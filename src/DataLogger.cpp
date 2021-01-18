@@ -3,12 +3,12 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
 #include <ESP8266HTTPClient.h>
-
+//#include <WiFiClientSecureBearSSL.h>
 #elif defined(ESP32)
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <AsyncTCP.h>
-
+#include <WiFiClientSecure.h>
 #endif
 
 #include <ESPAsyncWebServer.h>
@@ -68,7 +68,21 @@ void DataLogger::sendData(void)
 	DBG_PRINTF("data= %d, \"%s\"\n",len,data);
 
 	int code;
+
+#if ESP32	
 	WiFiClient wifiClient;
+	WiFiClientSecure sClient;
+	bool isHttps=false;
+
+	if( strncasecmp(_loggingInfo->url,"isHttps",5) ==0){
+//		sClient.setBufferSizes(1024, 1024);
+//		sClient.setInsecure();
+		isHttps=true;
+	}	
+#else
+	WiFiClient wifiClient;
+#endif
+
 	HTTPClient _http;
   	_http.setUserAgent(F("ESP8266"));
 
@@ -77,7 +91,10 @@ void DataLogger::sendData(void)
 	if(_loggingInfo->method == mHTTP_POST
 		|| _loggingInfo->method== mHTTP_PUT ){
 		// post
-
+		#if ESP32	
+		if(isHttps) _http.begin(sClient,_loggingInfo->url);
+		else 
+		#endif
 		_http.begin(wifiClient,_loggingInfo->url);
 
  		if(_loggingInfo->contentType){
@@ -88,7 +105,11 @@ void DataLogger::sendData(void)
     // start connection and send HTTP header
     	code = _http.sendRequest((_loggingInfo->method == mHTTP_POST)? "POST":"PUT",(uint8_t*)data,len);
     }else{
- 			_http.begin(wifiClient,String(_loggingInfo->url) + String("?") + String(data));
+		#if ESP32	
+		if(isHttps) _http.begin(sClient,String(_loggingInfo->url) + String("?") + String(data));
+		else
+		#endif
+ 		_http.begin(wifiClient,String(_loggingInfo->url) + String("?") + String(data));
     	code = _http.GET();
     }
 
